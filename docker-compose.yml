@@ -1,0 +1,23 @@
+services:
+  wtpy:
+    build:
+      context: ./docker
+      dockerfile: Dockerfile
+    image: wtpy-dev:py3.10
+    container_name: wtpy-dev
+    platform: linux/amd64
+    working_dir: /workspace/wtpy
+    environment:
+      PYTHONPATH: /workspace/wtpy
+      TZ: Asia/Shanghai
+    volumes:
+      - ./wtpy:/workspace/wtpy
+      - ./outputs:/workspace/outputs
+      - ./notebooks:/workspace/notebooks
+    ports:
+      - "8081:8081"   # WtBtSnooper (backtest browser UI)
+      - "8099:8099"   # WtMonSvr (monitor service, if used)
+      - "8888:8888"   # Jupyter Lab (optional)
+    stdin_open: true
+    tty: true
+    command: bash
