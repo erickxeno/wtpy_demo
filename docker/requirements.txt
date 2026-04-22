@@ -13,3 +13,5 @@ websockets>=10.4
 itsdangerous
 pytz
 python-multipart
+# Chinese market data source (AKShare) - free, no token required
+akshare
