@@ -9,3 +9,7 @@ fastapi
 uvicorn
 deap
 websockets>=10.4
+# WtBtSnooper / WtMonSvr web UI deps (not in upstream setup.py)
+itsdangerous
+pytz
+python-multipart

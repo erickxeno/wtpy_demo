@@ -14,6 +14,7 @@ services:
       - ./wtpy:/workspace/wtpy
       - ./outputs:/workspace/outputs
       - ./notebooks:/workspace/notebooks
+      - ./docker:/workspace/docker:ro
     ports:
       - "8081:8081"   # WtBtSnooper (backtest browser UI)
       - "8099:8099"   # WtMonSvr (monitor service, if used)
