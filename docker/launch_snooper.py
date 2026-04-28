@@ -254,6 +254,11 @@ CANDIDATE_WORKSPACES = [
         "path": "/workspace/wtpy/demos/cta_stk_bt/outputs_bt",
     },
     {
+        "id": "ws_cta_stk_bt_6m",
+        "name": "cta_stk_bt_6m (近6个月 日线)",
+        "path": "/workspace/bt/cta_stk_bt_6m/outputs_bt",
+    },
+    {
         "id": "ws_cta_stk_bt_recent",
         "name": "cta_stk_bt_recent (最近~23日 5min)",
         "path": "/workspace/bt/cta_stk_bt_recent/outputs_bt",

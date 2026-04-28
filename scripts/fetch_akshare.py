@@ -49,8 +49,13 @@ def fetch_etf_min(symbol: str, period: str, adjust: str,
         https://quotes.sina.cn/cn/api/json_v2.php/CN_MarketDataService.getKLineData
 
     Limits:
-      - Max 1023 rows per call (datalen cap)
-      - At 5-min period, 1023 rows ≈ 21 trading days (~1 month)
+      - Max 1970 rows per call (Sina's hard datalen cap; request >1970
+        returns null)
+      - Coverage at that cap depends on scale:
+          scale=5  (5min):  ~2 months
+          scale=15 (15min): ~6 months
+          scale=30 (30min): ~12 months
+          scale=60 (60min): ~2 years
       - Data only goes back from "today" — no arbitrary historical range
       - No adjust parameter (returns unadjusted); `adjust=` arg is accepted
         for API compatibility but ignored
@@ -68,7 +73,7 @@ def fetch_etf_min(symbol: str, period: str, adjust: str,
     params = {
         "symbol": sina_symbol,
         "scale": period,      # same as East Money klt: 1/5/15/30/60
-        "datalen": "1023",    # Sina's hard upper bound
+        "datalen": "1970",    # Sina's hard upper bound (1971+ returns null)
         "ma": "no",
     }
 
@@ -109,20 +114,34 @@ def to_wtpy_csv(df, out_path: Path) -> int:
         print(f"[fetch] no data received; not writing {out_path}", file=sys.stderr)
         return 0
 
-    # AKShare returns columns: 时间,开盘,收盘,最高,最低,涨跌幅,涨跌额,成交量,成交额,振幅,换手率
-    # Parse "2026-03-06 09:35" → date "2026/3/6" and time "09:35:00"
+    # Schema depends on bar scale:
+    #   minute: <Date>, <Time>, <Open>, <High>, <Low>, <Close>, <Volume>
+    #   daily:  date, open, high, low, close, volume, turnover
+    # (matches wtpy demo/storage/csv/*.csv conventions)
     import pandas as pd
     dt = pd.to_datetime(df["时间"])
+    is_daily = bool(dt.dt.normalize().equals(dt))  # all-midnight → daily
 
-    out = pd.DataFrame({
-        "<Date>": dt.dt.strftime("%Y/%-m/%-d"),
-        " <Time>": dt.dt.strftime("%H:%M:%S"),
-        " <Open>": df["开盘"].astype(float),
-        " <High>": df["最高"].astype(float),
-        " <Low>": df["最低"].astype(float),
-        " <Close>": df["收盘"].astype(float),
-        " <Volume>": df["成交量"].astype(float),
-    })
+    if is_daily:
+        out = pd.DataFrame({
+            "date": dt.dt.strftime("%Y/%m/%d"),
+            "open": df["开盘"].astype(float),
+            "high": df["最高"].astype(float),
+            "low": df["最低"].astype(float),
+            "close": df["收盘"].astype(float),
+            "volume": df["成交量"].astype(float),
+            "turnover": 0.0,  # Sina daily doesn't include turnover; wtpy tolerates 0
+        })
+    else:
+        out = pd.DataFrame({
+            "<Date>": dt.dt.strftime("%Y/%-m/%-d"),
+            " <Time>": dt.dt.strftime("%H:%M:%S"),
+            " <Open>": df["开盘"].astype(float),
+            " <High>": df["最高"].astype(float),
+            " <Low>": df["最低"].astype(float),
+            " <Close>": df["收盘"].astype(float),
+            " <Volume>": df["成交量"].astype(float),
+        })
 
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out.to_csv(out_path, index=False)
@@ -132,8 +151,9 @@ def to_wtpy_csv(df, out_path: Path) -> int:
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument("--symbol", default="510300", help="ETF code, e.g. 510300 (沪深300ETF)")
-    p.add_argument("--period", default="5", choices=["1", "5", "15", "30", "60"],
-                   help="minute-bar period")
+    p.add_argument("--period", default="5",
+                   choices=["1", "5", "15", "30", "60", "d"],
+                   help="bar period: minute value (1/5/15/30/60) or 'd' for daily")
     p.add_argument("--adjust", default="qfq", choices=["", "qfq", "hfq"],
                    help="'' = no adjust, qfq = forward-adjusted, hfq = backward-adjusted")
     p.add_argument("--start", default="2020-01-01 09:30:00",
@@ -147,9 +167,16 @@ def main() -> int:
     _disable_proxy()
 
     market = _detect_market_prefix(args.symbol)
-    # wtpy standard code: SSE.ETF.510300 — file name SSE.ETF.510300_m5.csv
+    # wtpy standard code: SSE.ETF.510300 — file names:
+    #   minute: SSE.ETF.510300_m5.csv     (scale=1/5/15/30/60)
+    #   daily:  SSE.ETF.510300_d.csv      (scale=240, wtpy convention drops N)
     std_code = f"{market}.ETF.{args.symbol}"
-    period_tag = f"m{args.period}"
+    if args.period == "d":
+        period_tag = "d"
+        sina_scale = "240"
+    else:
+        period_tag = f"m{args.period}"
+        sina_scale = args.period
 
     out_dir = Path(args.out_dir) if args.out_dir else Path(__file__).resolve().parent.parent / "bt" / "storage" / "csv"
     out_file = out_dir / f"{std_code}_{period_tag}.csv"
@@ -158,7 +185,7 @@ def main() -> int:
     print(f"[fetch] range={args.start} → {args.end}")
     print(f"[fetch] output={out_file}")
 
-    df = fetch_etf_min(args.symbol, args.period, args.adjust, args.start, args.end)
+    df = fetch_etf_min(args.symbol, sina_scale, args.adjust, args.start, args.end)
     if df is None or len(df) == 0:
         print("[fetch] FAIL: no rows returned", file=sys.stderr)
         return 2
