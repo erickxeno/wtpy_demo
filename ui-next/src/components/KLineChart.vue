@@ -4,7 +4,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { createChart } from 'lightweight-charts'
+import { createChart, CandlestickSeries, HistogramSeries } from 'lightweight-charts'
 
 const props = defineProps({
   bars: { type: Array, default: () => [] }
@@ -17,6 +17,8 @@ let volumeSeries = null
 let ro = null
 
 onMounted(() => {
+  if (!container.value) return
+  
   chart = createChart(container.value, {
     layout: {
       background: { color: '#1a1a2e' },
@@ -33,11 +35,11 @@ onMounted(() => {
       timeVisible: true,
       secondsVisible: false
     },
-    width: container.value.clientWidth,
+    width: container.value.clientWidth || 800,
     height: container.value.clientHeight || 400
   })
 
-  candleSeries = chart.addCandlestickSeries({
+  candleSeries = chart.addSeries(CandlestickSeries, {
     upColor: '#26a69a',
     downColor: '#ef5350',
     borderVisible: false,
@@ -45,7 +47,7 @@ onMounted(() => {
     wickDownColor: '#ef5350'
   })
 
-  volumeSeries = chart.addHistogramSeries({
+  volumeSeries = chart.addSeries(HistogramSeries, {
     color: '#385263',
     priceFormat: { type: 'volume' },
     priceScaleId: 'volume'
@@ -55,10 +57,10 @@ onMounted(() => {
     scaleMargins: { top: 0.8, bottom: 0 }
   })
 
-  if (props.bars.length) _setData(props.bars)
+  _setData(props.bars)
 
   ro = new ResizeObserver(() => {
-    if (container.value) {
+    if (container.value && chart) {
       chart.applyOptions({ width: container.value.clientWidth })
     }
   })
@@ -75,22 +77,32 @@ watch(() => props.bars, (newBars) => {
 }, { deep: true })
 
 function _setData(bars) {
-  if (!candleSeries || !bars.length) return
-  const candles = bars.map(b => ({
-    time: b.time,
-    open: b.open,
-    high: b.high,
-    low: b.low,
-    close: b.close
-  }))
-  const volumes = bars.map(b => ({
-    time: b.time,
-    value: b.volume,
-    color: b.close >= b.open ? '#26a69a55' : '#ef535055'
-  }))
-  candleSeries.setData(candles)
-  volumeSeries.setData(volumes)
-  chart.timeScale().fitContent()
+  if (!candleSeries || !volumeSeries) return
+  if (!bars || bars.length === 0) return
+  
+  try {
+    const candles = bars.map(b => ({
+      time: b.time,
+      open: parseFloat(b.open) || 0,
+      high: parseFloat(b.high) || 0,
+      low: parseFloat(b.low) || 0,
+      close: parseFloat(b.close) || 0
+    })).filter(c => c.time > 0)
+    
+    const volumes = bars.map((b, i) => ({
+      time: b.time,
+      value: parseFloat(b.volume) || 0,
+      color: (candles[i] && candles[i].close >= candles[i].open) ? '#26a69a55' : '#ef535055'
+    })).filter(v => v.time > 0)
+    
+    if (candles.length > 0) {
+      candleSeries.setData(candles)
+      volumeSeries.setData(volumes)
+      chart.timeScale().fitContent()
+    }
+  } catch (e) {
+    console.error('[KLineChart] Error setting data:', e)
+  }
 }
 </script>
 

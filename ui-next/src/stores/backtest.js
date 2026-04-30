@@ -20,9 +20,13 @@ export const useBacktestStore = defineStore('backtest', () => {
 
   async function fetchSessions() {
     try {
+      console.log('[fetchSessions] Starting...')
       const res = await http.post('/', { func: 'qrySessions', args: {} })
+      console.log('[fetchSessions] Response:', res.data)
       sessions.value = res.data.sessions || []
-    } catch {
+      console.log('[fetchSessions] sessions updated to:', sessions.value)
+    } catch (e) {
+      console.error('[fetchSessions] Error:', e)
       sessions.value = []
     }
   }

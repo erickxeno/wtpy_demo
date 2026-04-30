@@ -55,7 +55,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useBacktestStore } from '../stores/backtest'
 import KLineChart from '../components/KLineChart.vue'
 import FundCurve from '../components/FundCurve.vue'
@@ -71,12 +71,92 @@ const tabs = [
   { key: 'rounds', label: '回合统计' }
 ]
 
+// Generate mock K-line bars for demo
+function generateMockBars(count = 300) {
+  const bars = []
+  let basePrice = 3.50
+  const now = new Date()
+  const startTime = new Date(now.getTime() - count * 5 * 60 * 1000)
+
+  for (let i = 0; i < count; i++) {
+    const time = new Date(startTime.getTime() + i * 5 * 60 * 1000)
+    // Convert to Unix timestamp (seconds)
+    const timestamp = Math.floor(time.getTime() / 1000)
+    
+    const volatility = 0.002
+    const change = (Math.random() - 0.5) * 2 * volatility * basePrice
+    const open = basePrice + change
+    const close = open + (Math.random() - 0.5) * 2 * volatility * basePrice
+    const high = Math.max(open, close) + Math.random() * volatility * basePrice
+    const low = Math.min(open, close) - Math.random() * volatility * basePrice
+    const volume = Math.floor(Math.random() * 1000000 + 500000)
+
+    bars.push({ time: timestamp, open, high, low, close, volume })
+    basePrice = close
+  }
+  return bars
+}
+
+// Generate mock funds data
+function generateMockFunds() {
+  const funds = []
+  let equity = 1000000
+  const now = new Date()
+  for (let i = 30; i >= 0; i--) {
+    const d = new Date(now.getTime() - i * 86400000)
+    equity *= (1 + (Math.random() - 0.4) * 0.02)
+    funds.push({
+      date: d.toISOString().slice(0, 10).replace(/-/g, ''),
+      equity: Math.round(equity * 100) / 100,
+      balance: Math.round(equity * 100) / 100,
+      margin: 0,
+      float_profit: Math.round((Math.random() - 0.5) * 5000 * 100) / 100
+    })
+  }
+  return funds
+}
+
+// Load demo data directly
+function loadDemoData() {
+  store.sessions = ['CTA_Strategy', 'HFT_Strategy', 'Arbitrage_Strategy']
+  store.bars = generateMockBars(300)
+  store.funds = generateMockFunds()
+  store.trades = []
+  store.rounds = []
+  store.summary = {
+    totalProfit: 125840.50,
+    profitRatio: 12.58,
+    maxDrawdown: -8350.20,
+    maxDrawdownRatio: -3.28,
+    winRate: 68.5,
+    totalTrades: 156,
+    avgProfit: 806.67
+  }
+}
+
 onMounted(async () => {
+  // Try to fetch from API first
   await store.fetchSessions()
+  
+  // If no sessions (API failed or no backend), use demo data
+  if (store.sessions.length === 0) {
+    console.log('[BacktestView] No sessions from API, loading demo data')
+    loadDemoData()
+  }
+})
+
+// Watch for session changes and load data
+watch(() => store.currentSession, async (newSession) => {
+  if (newSession) {
+    console.log('[BacktestView] Session changed to:', newSession)
+    await store.loadAll()
+  }
 })
 
 async function onSessionChange() {
-  if (store.currentSession) await store.loadAll()
+  if (store.currentSession) {
+    await store.loadAll()
+  }
 }
 </script>
 
@@ -125,7 +205,7 @@ async function onSessionChange() {
   flex: 1;
   overflow: hidden;
 }
-.chart-area { flex: 1; min-height: 360px; overflow: hidden; }
+.chart-area { flex: 1; min-height: 400px; height: 400px; overflow: hidden; }
 .perf-area {
   padding: 10px 16px;
   border-top: 1px solid #2d2d44;

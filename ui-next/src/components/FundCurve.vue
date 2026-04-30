@@ -4,7 +4,7 @@
 
 <script setup>
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
-import { createChart } from 'lightweight-charts'
+import { createChart, LineSeries } from 'lightweight-charts'
 
 const props = defineProps({
   funds: { type: Array, default: () => [] }
@@ -32,13 +32,13 @@ onMounted(() => {
     height: container.value.clientHeight || 240
   })
 
-  equitySeries = chart.addLineSeries({
+  equitySeries = chart.addSeries(LineSeries, {
     color: '#26a69a',
     lineWidth: 2,
     title: '净值'
   })
 
-  balanceSeries = chart.addLineSeries({
+  balanceSeries = chart.addSeries(LineSeries, {
     color: '#2196f3',
     lineWidth: 1,
     lineStyle: 2,
